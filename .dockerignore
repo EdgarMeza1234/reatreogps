@@ -1,0 +1,10 @@
+node_modules
+*.db
+cloudflared.exe
+server.key
+server.crt
+.routes
+Dockerfile
+.dockerignore
+.git
+.gitignore

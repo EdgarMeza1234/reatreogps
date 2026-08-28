@@ -1,0 +1,13 @@
+services:
+  rastreogps:
+    build: .
+    container_name: rastreogps
+    restart: unless-stopped
+    ports:
+      - "3100:3100"
+    environment:
+      PORT: "3100"
+    volumes:
+      - rastreogps-data:/app/data
+volumes:
+  rastreogps-data:

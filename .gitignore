@@ -1,0 +1,16 @@
+# Datos generados
+*.db
+*.db-journal
+*.db-wal
+*.db-shm
+
+# Herramientas locales
+cloudflared.exe
+
+# Certificados
+server.key
+server.crt
+
+# Node
+node_modules/
+npm-debug.log*

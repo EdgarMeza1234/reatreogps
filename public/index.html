@@ -1,0 +1,168 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Rutas GPS</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.css">
+<style>
+  * { box-sizing: border-box; font-family: system-ui, Arial, sans-serif; }
+  body { margin: 0; height: 100vh; display: flex; }
+  #sidebar { width: 300px; background: #0f172a; color: #e2e8f0; padding: 16px; display: flex; flex-direction: column; overflow-y: auto; }
+  #map { flex: 1; }
+  h1 { font-size: 18px; margin: 0 0 8px; }
+  .range { display: flex; gap: 6px; margin-bottom: 12px; flex-wrap: wrap; }
+  .range button { flex: 1; padding: 8px; border: 0; border-radius: 8px; background: #334155; color: #e2e8f0; cursor: pointer; font-size: 12px; }
+  .range button.active { background: #38bdf8; color: #082f49; font-weight: 600; }
+  .dev { display: flex; align-items: center; gap: 8px; padding: 8px; border-radius: 8px; cursor: pointer; background: #1e293b; margin-bottom: 6px; }
+  .dev:hover { background: #2b3a52; }
+  .dev input { accent-color: #38bdf8; }
+  .dev .dot { width: 10px; height: 10px; border-radius: 50%; flex: none; }
+  .dev .info { flex: 1; min-width: 0; }
+  .dev .name { font-weight: 600; font-size: 14px; }
+  .dev .meta { font-size: 11px; color: #94a3b8; }
+  .online { color: #22c55e; } .offline { color: #ef4444; }
+  .btnmap { width: 100%; padding: 10px; margin-top: auto; border: 0; border-radius: 8px; background: #22c55e; color: #052e16; font-weight: 700; cursor: pointer; }
+  .footer { font-size: 11px; color: #64748b; margin-top: 10px; text-align: center; }
+  .hint { background: #1e293b; border-radius: 10px; padding: 10px; font-size: 12px; color: #cbd5e1; margin-bottom: 10px; }
+  .hint a { color: #38bdf8; }
+  @media (max-width: 700px) { body { flex-direction: column; } #sidebar { width: 100%; height: 45%; } #map { height: 55%; } }
+</style>
+</head>
+<body>
+<div id="sidebar">
+  <h1>📍 Rutas GPS</h1>
+  <div class="hint">Los celulares reportan desde la página <a href="/tracker" target="_blank">/tracker</a>. Mantenla abierta en cada viaje.</div>
+  <div class="range">
+    <button data-range="today" class="active">Hoy</button>
+    <button data-range="24h">24 horas</button>
+    <button data-range="all">Todo</button>
+  </div>
+  <div id="devices"><p style="color:#64748b">Cargando...</p></div>
+  <button id="refresh" class="btnmap">Actualizar rutas</button>
+  <div class="footer">Actualizacion automatica cada 10 s</div>
+</div>
+<div id="map"></div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.js"></script>
+<script>
+const map = L.map('map').setView([-12.0, -77.0], 9);
+L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { attribution: '&copy; OpenStreetMap' }).addTo(map);
+
+const state = { checked: new Set(), range: 'today' };
+const deviceLayers = {};   // nombre -> { marker, route }
+
+function rangeFilter() {
+  const now = new Date();
+  if (state.range === 'today') {
+    const d = new Date(now); d.setHours(0,0,0,0);
+    return d.toISOString();
+  }
+  if (state.range === '24h') {
+    const d = new Date(now.getTime() - 24*3600*1000);
+    return d.toISOString();
+  }
+  return null;
+}
+
+const PALETTE = ['#38bdf8','#f97316','#22c55e','#eab308','#a855f7','#ef4444','#14b8a6','#f472b6'];
+function colorFor(name) {
+  let h = 0; for (let i=0;i<name.length;i++) h = (h*31 + name.charCodeAt(i)) >>> 0;
+  return PALETTE[h % PALETTE.length];
+}
+
+function renderDeviceList(devices, pointsCount) {
+  const box = document.getElementById('devices');
+  if (!devices.length) { box.innerHTML = '<p style="color:#64748b">Aun no hay celulares reportando.</p>'; return; }
+  box.innerHTML = '';
+  devices.forEach(d => {
+    const row = document.createElement('label');
+    row.className = 'dev';
+    const cb = document.createElement('input');
+    cb.type = 'checkbox';
+    cb.checked = state.checked.has(d.name);
+    cb.addEventListener('change', () => {
+      if (cb.checked) state.checked.add(d.name); else state.checked.delete(d.name);
+      loadRoutes();
+    });
+    const color = colorFor(d.name);
+    row.innerHTML = `
+      <span class="dot" style="background:${color}"></span>
+      <span class="info">
+        <span class="name">${esc(d.name)}</span>
+        <span class="meta"><span class="${d.online ? 'online' : 'offline'}">${d.online ? '● en linea' : '○ apagado'}</span> · ${d.puntos} pts · ${d.online ? new Date(d.last_at).toLocaleTimeString() : esc(new Date(d.last_at).toLocaleString())}</span>
+      </span>`;
+    row.prepend(cb);
+    box.appendChild(row);
+    deviceLayers[d.name] = { marker: makeMarker(d, color) };
+  });
+  setIntervalTouch(pointsCount);
+}
+
+function makeMarker(d, color) {
+  return L.circleMarker([d.lat, d.lng], { radius: 8, color: '#fff', weight: 2, fillColor: color, fillOpacity: 1 })
+    .bindPopup(`<b>${esc(d.name)}</b><br>${d.lat.toFixed(5)}, ${d.lng.toFixed(5)}<br>${esc(new Date(d.last_at).toLocaleString())}`);
+}
+
+async function loadRoutes() {
+  const from = rangeFilter();
+  for (const [name, layer] of Object.entries(deviceLayers)) {
+    if (!state.checked.has(name)) {
+      if (layer.marker) map.removeLayer(layer.marker);
+      if (layer.route) { map.removeLayer(layer.route); layer.route = null; }
+      continue;
+    }
+    if (!map.hasLayer(layer.marker)) layer.marker.addTo(map);
+    let url = '/api/points?device=' + encodeURIComponent(name);
+    if (from) url += '&from=' + encodeURIComponent(from);
+    try {
+      const r = await fetch(url);
+      const data = await r.json();
+      if (layer.route) { map.removeLayer(layer.route); layer.route = null; }
+      if (data.points && data.points.length > 1) {
+        const line = data.points.map(p => [p.lat, p.lng]);
+        layer.route = L.polyline(line, { color: colorFor(name), weight: 4, opacity: .85 }).addTo(map);
+        const first = data.points[0], last = data.points[data.points.length - 1];
+        L.circleMarker([first.lat, first.lng], { radius: 5, color: '#16a34a', fillColor: '#16a34a', fillOpacity: 1 }).addTo(map);
+        L.circleMarker([last.lat, last.lng], { radius: 5, color: '#dc2626', fillColor: '#dc2626', fillOpacity: 1 }).addTo(map);
+      }
+    } catch (e) { /* sin conexion, se reintenta solo */ }
+  }
+}
+
+let autoTimer = null;
+async function refreshDevices() {
+  try {
+    const r = await fetch('/api/devices');
+    const data = await r.json();
+    const known = new Set(Object.keys(deviceLayers));
+    data.devices.forEach(d => { if (!deviceLayers[d.name]) deviceLayers[d.name] = {}; });
+    renderDeviceList(data.devices, data.devices.length);
+    loadRoutes();
+    autoTimer = setTimeout(refreshDevices, 10000);
+  } catch (e) {
+    autoTimer = setTimeout(refreshDevices, 10000);
+  }
+}
+
+function setIntervalTouch(_) { /* placeholder para extender luego */ }
+
+function esc(s) {
+  return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+
+document.querySelectorAll('.range button').forEach(b => {
+  b.addEventListener('click', () => {
+    document.querySelectorAll('.range button').forEach(x => x.classList.remove('active'));
+    b.classList.add('active');
+    state.range = b.dataset.range;
+    loadRoutes();
+  });
+});
+
+document.getElementById('refresh').addEventListener('click', () => { refreshDevices(); });
+
+refreshDevices();
+</script>
+</body>
+</html>

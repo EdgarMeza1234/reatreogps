@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Rastrear mi celular</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; font-family: system-ui, Arial, sans-serif; }
+  body { background: #0f172a; color: #e2e8f0; min-height: 100vh; padding: 16px; display: flex; flex-direction: column; align-items: center; }
+  .card { background: #1e293b; border-radius: 14px; padding: 20px; max-width: 420px; width: 100%; box-shadow: 0 8px 24px rgba(0,0,0,.35); }
+  h1 { font-size: 20px; margin-bottom: 12px; }
+  label { display: block; margin: 12px 0 6px; font-size: 13px; color: #94a3b8; }
+  input { width: 100%; padding: 10px; border-radius: 8px; border: 1px solid #334155; background: #0f172a; color: #fff; font-size: 16px; }
+  .btn { display: block; width: 100%; padding: 14px; margin-top: 16px; border: 0; border-radius: 10px; font-size: 16px; font-weight: 600; cursor: pointer; }
+  .btn-on { background: #22c55e; color: #052e16; }
+  .btn-off { background: #ef4444; color: #450a0a; }
+  .btn:disabled { opacity: .5; cursor: not-allowed; }
+  .status { margin-top: 16px; font-size: 14px; }
+  .status div { padding: 6px 0; border-bottom: 1px solid #334155; display: flex; justify-content: space-between; gap: 8px; }
+  .status .v { color: #38bdf8; font-weight: 600; text-align: right; }
+  .dot { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 6px; }
+  .green { background: #22c55e; } .red { background: #ef4444; } .yellow { background: #eab308; }
+  .link { display: block; text-align: center; margin-top: 14px; color: #38bdf8; text-decoration: none; font-size: 14px; }
+</style>
+</head>
+<body>
+<div class="card">
+  <h1>📡 Rastreador GPS</h1>
+  <label>Nombre de este celular (quien lo lleva)</label>
+  <input id="name" type="text" placeholder="Ej: Mama, Papa, Junior..." maxlength="50">
+  <button id="btn" class="btn btn-on">Empezar a rastrear</button>
+
+  <div class="status">
+    <div><span><span id="dot" class="dot red"></span>Estado</span><span class="v" id="state">Detenido</span></div>
+    <div><span>GPS</span><span class="v" id="gps">Esperando...</span></div>
+    <div><span>Precision</span><span class="v" id="acc">-</span></div>
+    <div><span>Ultimo envio</span><span class="v" id="last">-</span></div>
+    <div><span>Puntos enviados</span><span class="v" id="count">0</span></div>
+    <div><span>Pantalla</span><span class="v" id="wake">-</span></div>
+  </div>
+
+  <a class="link" href="/" target="_blank">Ver mapa de rutas →</a>
+</div>
+
+<script>
+const nameEl = document.getElementById('name');
+const btn = document.getElementById('btn');
+const dot = document.getElementById('dot');
+const stateEl = document.getElementById('state');
+const gpsEl = document.getElementById('gps');
+const accEl = document.getElementById('acc');
+const lastEl = document.getElementById('last');
+const countEl = document.getElementById('count');
+const wakeEl = document.getElementById('wake');
+
+nameEl.value = localStorage.getItem('rastreo_name') || '';
+
+let watchId = null;
+let intervalId = null;
+let wakeLock = null;
+let count = 0;
+let lastPos = null;
+let lastSent = null;
+
+const FROM_DASHBOARD = new URLSearchParams(location.search).get('name');
+if (FROM_DASHBOARD) { nameEl.value = FROM_DASHBOARD; localStorage.setItem('rastreo_name', FROM_DASHBOARD); }
+
+function deviceName() {
+  const n = nameEl.value.trim();
+  if (!n) { alert('Pon un nombre primero (ej: tu nombre).'); return null; }
+  localStorage.setItem('rastreo_name', n);
+  return n;
+}
+
+async function send(pos) {
+  const device = deviceName();
+  if (!device) return;
+  const body = { device, lat: pos.coords.latitude, lng: pos.coords.longitude, acc: pos.coords.accuracy || null };
+  try {
+    const r = await fetch('/api/points', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body)
+    });
+    const res = await r.json();
+    if (res.ok) {
+      count++;
+      countEl.textContent = count;
+      lastEl.textContent = new Date().toLocaleTimeString();
+    }
+  } catch (e) {
+    console.error('Error enviando posicion:', e);
+  }
+}
+
+function start() {
+  const device = deviceName();
+  if (!device) return;
+  if (!navigator.geolocation) { alert('Este navegador no soporta GPS.'); return; }
+
+  stateEl.textContent = 'Buscando GPS...';
+  dot.className = 'dot yellow';
+  btn.textContent = 'Detener';
+  btn.className = 'btn btn-off';
+
+  lastPos = null;
+  count = 0;
+  countEl.textContent = '0';
+  wakeLockRequest();
+
+  watchId = navigator.geolocation.watchPosition(
+    (pos) => {
+      gpsEl.textContent = pos.coords.latitude.toFixed(5) + ', ' + pos.coords.longitude.toFixed(5);
+      accEl.textContent = Math.round(pos.coords.accuracy) + ' m';
+      if (lastPos && distance(lastPos, pos.coords) < 15) return;
+      lastPos = pos.coords;
+      stateEl.textContent = 'Enviando...';
+      send(pos).then(() => {
+        stateEl.textContent = 'Rastreando';
+        dot.className = 'dot green';
+      });
+    },
+    (err) => {
+      gpsEl.textContent = 'Error: ' + err.message;
+      stateEl.textContent = 'Sin GPS';
+      dot.className = 'dot red';
+    },
+    { enableHighAccuracy: true, maximumAge: 1000, timeout: 15000 }
+  );
+
+  intervalId = setInterval(() => {
+    if (lastPos) send(lastPos);
+  }, 10000);
+}
+
+function stop() {
+  if (watchId !== null) navigator.geolocation.clearWatch(watchId);
+  if (intervalId !== null) clearInterval(intervalId);
+  watchId = null; intervalId = null;
+  stateEl.textContent = 'Detenido';
+  dot.className = 'dot red';
+  btn.textContent = 'Empezar a rastrear';
+  btn.className = 'btn btn-on';
+  gpsEl.textContent = 'Esperando...';
+  if (wakeLock) { wakeLock.release().catch(()=>{}); wakeLock = null; wakeEl.textContent = '-'; }
+}
+
+async function wakeLockRequest() {
+  if (!('wakeLock' in navigator)) { wakeEl.textContent = 'No soportado'; return; }
+  try {
+    wakeLock = await navigator.wakeLock.request('screen');
+    wakeEl.textContent = 'Encendida (OK)';
+  } catch (e) {
+    wakeEl.textContent = 'No activada';
+  }
+}
+
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'visible' && watchId !== null) wakeLockRequest();
+});
+
+function distance(a, b) {
+  const R = 6371000, dLat = (b.latitude - a.latitude) * Math.PI / 180, dLng = (b.longitude - a.longitude) * Math.PI / 180;
+  const s = Math.sin(dLat/2)**2 + Math.cos(a.latitude*Math.PI/180)*Math.cos(b.latitude*Math.PI/180)*Math.sin(dLng/2)**2;
+  return 2 * R * Math.asin(Math.sqrt(s));
+}
+
+btn.addEventListener('click', () => {
+  if (watchId === null) start(); else stop();
+});
+
+window.addEventListener('beforeunload', stop);
+</script>
+</body>
+</html>
