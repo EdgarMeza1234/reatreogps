@@ -39,7 +39,7 @@
     <div><span>Pantalla</span><span class="v" id="wake">-</span></div>
   </div>
 
-  <a class="link" href="/" target="_blank">Ver mapa de rutas →</a>
+  <a class="link" href="./" target="_blank">Ver mapa de rutas →</a>
 </div>
 
 <script>
@@ -77,7 +77,7 @@ async function send(pos) {
   if (!device) return;
   const body = { device, lat: pos.coords.latitude, lng: pos.coords.longitude, acc: pos.coords.accuracy || null };
   try {
-    const r = await fetch('/api/points', {
+    const r = await fetch('api/points', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(body)

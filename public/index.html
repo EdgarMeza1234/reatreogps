@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Rutas GPS</title>
-<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.css">
+<link rel="stylesheet" href="vendor/leaflet/leaflet.css">
 <style>
   * { box-sizing: border-box; font-family: system-ui, Arial, sans-serif; }
   body { margin: 0; height: 100vh; display: flex; }
@@ -44,7 +44,7 @@
 </div>
 <div id="map"></div>
 
-<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.js"></script>
+<script src="vendor/leaflet/leaflet.js"></script>
 <script>
 const map = L.map('map').setView([-12.0, -77.0], 9);
 L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { attribution: '&copy; OpenStreetMap' }).addTo(map);
@@ -113,7 +113,7 @@ async function loadRoutes() {
       continue;
     }
     if (!map.hasLayer(layer.marker)) layer.marker.addTo(map);
-    let url = '/api/points?device=' + encodeURIComponent(name);
+    let url = 'api/points?device=' + encodeURIComponent(name);
     if (from) url += '&from=' + encodeURIComponent(from);
     try {
       const r = await fetch(url);
@@ -131,18 +131,23 @@ async function loadRoutes() {
 }
 
 let autoTimer = null;
+let errs = 0;
 async function refreshDevices() {
   try {
-    const r = await fetch('/api/devices');
+    const r = await fetch('api/devices');
     const data = await r.json();
-    const known = new Set(Object.keys(deviceLayers));
-    data.devices.forEach(d => { if (!deviceLayers[d.name]) deviceLayers[d.name] = {}; });
-    renderDeviceList(data.devices, data.devices.length);
-    loadRoutes();
-    autoTimer = setTimeout(refreshDevices, 10000);
+    if (data && Array.isArray(data.devices)) {
+      data.devices.forEach(d => { if (!deviceLayers[d.name]) deviceLayers[d.name] = {}; });
+      renderDeviceList(data.devices, data.devices.length);
+      loadRoutes();
+    }
+    errs = 0;
   } catch (e) {
-    autoTimer = setTimeout(refreshDevices, 10000);
+    errs++;
+    document.getElementById('devices').innerHTML = '<p style="color:#f87171">Sin conexion con el servidor (' + errs + '). Se reintenta sola...</p>';
   }
+  autoTimer = setTimeout(refreshDevices, 10000);
+}
 }
 
 function setIntervalTouch(_) { /* placeholder para extender luego */ }
