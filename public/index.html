@@ -76,7 +76,7 @@ function fitToDevices() {
   for (const [name, layer] of Object.entries(deviceLayers)) {
     if (state.checked.has(name) && layer.marker) pts.push(layer.marker.getLatLng());
   }
-  if (pts.length) map.fitBounds(L.latLngBounds(pts).pad(0.3));
+  if (pts.length) map.fitBounds(L.latLngBounds(pts).pad(0.12));
 }
 
 function renderDeviceList(devices, pointsCount) {
