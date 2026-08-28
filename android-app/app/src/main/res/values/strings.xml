@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Rastreo GPS</string>
+    <string name="title">Rastreo GPS en segundo plano</string>
+    <string name="subtitle">Envía tu ubicación a tu servidor aunque la pantalla esté apagada.</string>
+    <string name="hint_name">Nombre del dispositivo (ej: Edgar)</string>
+    <string name="hint_url">Servidor (ej: https://tudominio/rastreogps)</string>
+    <string name="btn_start">Iniciar rastreo</string>
+</resources>
