@@ -4,6 +4,13 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Rutas GPS</title>
+<script>
+(function(){
+  var p = location.pathname.replace(/index\.html$/, '');
+  var base = p.charAt(p.length - 1) === '/' ? p : p + '/';
+  document.write('<base href="' + base + '">');
+})();
+</script>
 <link rel="stylesheet" href="vendor/leaflet/leaflet.css">
 <style>
   * { box-sizing: border-box; font-family: system-ui, Arial, sans-serif; }
