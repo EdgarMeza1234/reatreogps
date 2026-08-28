@@ -26,7 +26,9 @@ services:
 
 volumes:
   rastreogps-data:
+    name: rastreogps_rastreogps-data
 
 networks:
   rastreogps-net:
+    name: rastreogps_rastreogps-net
     driver: bridge
