@@ -10,6 +10,8 @@ WORKDIR /app
 COPY server.js ./
 COPY public ./public
 
+RUN mkdir -p /app/data
+
 # Puerto de la aplicacion (el compose puede sobreescribirlo)
 ENV PORT=3100
 EXPOSE 3100

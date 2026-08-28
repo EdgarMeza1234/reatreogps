@@ -1,13 +1,32 @@
 services:
   rastreogps:
     build: .
-    container_name: rastreogps
+    container_name: rastreogps-app
     restart: unless-stopped
-    ports:
-      - "3100:3100"
     environment:
-      PORT: "3100"
+      PORT: "3010"
+      DB_FILE: /app/data/rastreogps.db
     volumes:
       - rastreogps-data:/app/data
+    networks:
+      - rastreogps-net
+
+  web:
+    build:
+      context: .
+      dockerfile: web.Dockerfile
+    container_name: rastreogps-web
+    restart: unless-stopped
+    ports:
+      - "3006:80"
+    depends_on:
+      - rastreogps
+    networks:
+      - rastreogps-net
+
 volumes:
   rastreogps-data:
+
+networks:
+  rastreogps-net:
+    driver: bridge
