@@ -71,6 +71,14 @@ function colorFor(name) {
   return PALETTE[h % PALETTE.length];
 }
 
+function fitToDevices() {
+  const pts = [];
+  for (const [name, layer] of Object.entries(deviceLayers)) {
+    if (state.checked.has(name) && layer.marker) pts.push(layer.marker.getLatLng());
+  }
+  if (pts.length) map.fitBounds(L.latLngBounds(pts).pad(0.3));
+}
+
 function renderDeviceList(devices, pointsCount) {
   const box = document.getElementById('devices');
   if (!devices.length) { box.innerHTML = '<p style="color:#64748b">Aun no hay celulares reportando.</p>'; return; }
@@ -84,6 +92,7 @@ function renderDeviceList(devices, pointsCount) {
     cb.addEventListener('change', () => {
       if (cb.checked) state.checked.add(d.name); else state.checked.delete(d.name);
       loadRoutes();
+      fitToDevices();
     });
     const color = colorFor(d.name);
     row.innerHTML = `
@@ -132,6 +141,7 @@ async function loadRoutes() {
 
 let autoTimer = null;
 let errs = 0;
+let fitted = false;
 async function refreshDevices() {
   try {
     const r = await fetch('api/devices');
@@ -139,6 +149,7 @@ async function refreshDevices() {
     if (data && Array.isArray(data.devices)) {
       data.devices.forEach(d => { if (!deviceLayers[d.name]) { deviceLayers[d.name] = {}; state.checked.add(d.name); } });
       renderDeviceList(data.devices, data.devices.length);
+      if (!fitted && data.devices.length) { fitToDevices(); fitted = true; }
       loadRoutes();
     }
     errs = 0;
