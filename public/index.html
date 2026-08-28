@@ -137,7 +137,7 @@ async function refreshDevices() {
     const r = await fetch('api/devices');
     const data = await r.json();
     if (data && Array.isArray(data.devices)) {
-      data.devices.forEach(d => { if (!deviceLayers[d.name]) deviceLayers[d.name] = {}; });
+      data.devices.forEach(d => { if (!deviceLayers[d.name]) { deviceLayers[d.name] = {}; state.checked.add(d.name); } });
       renderDeviceList(data.devices, data.devices.length);
       loadRoutes();
     }
@@ -147,7 +147,6 @@ async function refreshDevices() {
     document.getElementById('devices').innerHTML = '<p style="color:#f87171">Sin conexion con el servidor (' + errs + '). Se reintenta sola...</p>';
   }
   autoTimer = setTimeout(refreshDevices, 10000);
-}
 }
 
 function setIntervalTouch(_) { /* placeholder para extender luego */ }
