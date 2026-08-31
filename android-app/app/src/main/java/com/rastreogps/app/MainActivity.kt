@@ -38,6 +38,8 @@ class MainActivity : Activity() {
         val status = findViewById<TextView>(R.id.status)
 
         btn.setOnClickListener {
+            val name = nameInput.text.toString().trim()
+            val url = urlInput.text.toString().trim().trimEnd('/')
             if (isRunning()) {
                 stopService(Intent(this, GpsService::class.java))
                 setRunning(false)
@@ -45,12 +47,10 @@ class MainActivity : Activity() {
                 status.text = "Detenido. Se apaga el GPS."
                 return@setOnClickListener
             }
-            val name = nameInput.text.toString().trim()
             if (name.isEmpty()) {
                 status.text = "Ponle un nombre (ej: Edgar)."
                 return@setOnClickListener
             }
-            val url = urlInput.text.toString().trim().trimEnd('/')
             prefs.edit().putString("device", name).putString("base_url", url).apply()
             if (!hasPermissions()) {
                 requestPermissions()

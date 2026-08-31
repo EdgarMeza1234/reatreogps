@@ -27,8 +27,6 @@ class GpsService : Service() {
     private lateinit var fused: FusedLocationProviderClient
     private var lastPostMs = 0L
     private val minIntervalMs: Long = 30_000
-    private var baseUrl = ""
-    private var device = ""
 
     private val callback = object : LocationCallback() {
         override fun onLocationResult(result: LocationResult) {
@@ -52,9 +50,6 @@ class GpsService : Service() {
             stopSelf()
             return START_NOT_STICKY
         }
-        val prefs = getSharedPreferences("rastreogps", Context.MODE_PRIVATE)
-        baseUrl = prefs.getString("base_url", "").orEmpty().trim().trimEnd('/')
-        device = prefs.getString("device", "").orEmpty().trim()
         startUpdates()
         return START_STICKY
     }
@@ -74,14 +69,17 @@ class GpsService : Service() {
     }
 
     private fun postAsync(loc: Location) {
-        if (baseUrl.isEmpty() || device.isEmpty()) return
+        val prefs = getSharedPreferences("rastreogps", Context.MODE_PRIVATE)
+        val dev = prefs.getString("device", "").orEmpty().trim()
+        val urlBase = prefs.getString("base_url", "").orEmpty().trim().trimEnd('/')
+        if (urlBase.isEmpty() || dev.isEmpty()) return
         val ok = try {
             val obj = JSONObject()
-                .put("device", device)
+                .put("device", dev)
                 .put("lat", loc.latitude)
                 .put("lng", loc.longitude)
                 .put("acc", loc.accuracy)
-            val url = URL("$baseUrl/api/points")
+            val url = URL("$urlBase/api/points")
             val conn = url.openConnection() as HttpURLConnection
             conn.requestMethod = "POST"
             conn.connectTimeout = 10_000
@@ -109,6 +107,8 @@ class GpsService : Service() {
     override fun onBind(intent: Intent?): IBinder? = null
 
     private fun buildNotification(): Notification {
+        val dev = getSharedPreferences("rastreogps", Context.MODE_PRIVATE)
+            .getString("device", "").orEmpty().trim()
         val stop = PendingIntent.getService(
             this, 0,
             Intent(this, GpsService::class.java).setAction("STOP"),
@@ -121,7 +121,7 @@ class GpsService : Service() {
         )
         val b = Notification.Builder(this, CHANNEL_ID)
             .setContentTitle("Rastreo GPS activo")
-            .setContentText(device.ifEmpty { "Reportando ubicacion" })
+            .setContentText(dev.ifEmpty { "Reportando ubicacion" })
             .setSmallIcon(R.drawable.ic_launcher)
             .setContentIntent(open)
             .setOngoing(true)
